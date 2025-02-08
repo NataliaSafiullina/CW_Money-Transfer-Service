@@ -23,7 +23,11 @@ public class CardService {
         this.cardRepository = cardRepository;
     }
 
-    public OkResponsesDTO transfer(Transfer transfer){
+    public OkResponsesDTO confirm(Confirmation confirmation) {
+        return new OkResponsesDTO(Long.toString(operationId.incrementAndGet()));
+    }
+
+    public OkResponsesDTO transfer(Transfer transfer) {
         addCards(transfer);
 
         // Получаем карты участвующие в операции
@@ -42,12 +46,19 @@ public class CardService {
         String currency = transfer.getAmount().getCurrency();
         long value = transfer.getAmount().getValue();
 
+        // Создадим макет транзакции, не подтвержденный перевод
+        Transaction transaction = new Transaction(cardFrom.getCardNumber(), cardTo.getCardNumber(), currency, value, "999");
+
+
         // Проверим достаточно ли денег на карте отправителя.
         // Сделаем списание и зачисление денег.
+        long valueCardFrom = cardFrom.getCardSums().get(currency);
+        long valueCardTo = cardTo.getCardSums().get(currency);
         makeTransaction(cardFrom, cardTo, currency, value);
 
         // Проверим результат перевода
-        if ((cardTo.getCardSums().get(currency) - cardFrom.getCardSums().get(currency)) != (value * 2)) {
+        if ((cardTo.getCardSums().get(currency) - valueCardTo) != value
+                || (valueCardFrom - cardFrom.getCardSums().get(currency)) != value) {
             throw new ErrorTransfer("Error transfer");
         }
 
@@ -57,7 +68,7 @@ public class CardService {
     private void makeTransaction(Card cardFrom, Card cardTo, String currency, long value) {
         if (cardFrom.getCardSums().containsKey(currency)) {
             long amountFrom = cardFrom.getCardSums().get(currency) - value;
-            if(amountFrom >= 0){
+            if (amountFrom >= 0) {
                 // Старт транзакции
                 Map<String, Long> cardFromSums = new HashMap<>();
                 cardFromSums.put(currency, amountFrom);
@@ -92,6 +103,11 @@ public class CardService {
         return List.of(cardFrom, cardTo);
     }
 
+    /**
+     * Метод addCards добавляет набор из двух карт в хранилище чтобы на них проверить работу сервиса.
+     *
+     * @param transfer - получаем от фронта введенные данные и создаем из них карты.
+     */
     public void addCards(Transfer transfer) {
         Card card1 = new Card(
                 transfer.getCardFromNumber(),
@@ -107,7 +123,7 @@ public class CardService {
                 transfer.getCardFromValidTill(),
                 transfer.getCardFromCVV());
         card2.setCardSums(new HashMap<>() {{
-            put("RUR", 100000L);
+            put("RUR", 200000L);
         }});
         cardRepository.addCard(card2);
     }

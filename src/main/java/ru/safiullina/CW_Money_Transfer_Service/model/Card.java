@@ -28,7 +28,6 @@ public class Card {
 
     private Map<String, Long> cardSums;
 
-    // TODO: забыла зачем нам пустой конструктор
     public Card() {}
     public Card(String cardNumber, String cardValidTill, String cardCVV) {
         this.cardNumber = cardNumber;
