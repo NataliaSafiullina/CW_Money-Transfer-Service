@@ -10,7 +10,8 @@ public interface CardRepository {
     Card addCard(Card card);
     Optional<Card> getByNumber(String cardNumber);
 
-    boolean addTransaction(long operationId, Transaction transaction);
-    boolean deleteTransaction(long operationId);
+    boolean addTransaction(String operationId, Transaction transaction);
+    Optional<Transaction> getTransaction(String operationId);
+    boolean deleteTransaction(String operationId);
 
 }

@@ -12,8 +12,9 @@ public class CardRepositoryImpl implements CardRepository {
 
     // cards - храним список карт, искать будем по номеру карты, который будет ключом
     private final ConcurrentHashMap<String, Card> cards = new ConcurrentHashMap<>();
-    // transactions - хранит не подтвержденные транзакции
-    private final ConcurrentHashMap<Long, Transaction> transactions = new ConcurrentHashMap<>();
+
+    // transactions - хранит не подтвержденные транзакции, где String - это id операции и ключ мапы
+    private final ConcurrentHashMap<String, Transaction> transactions = new ConcurrentHashMap<>();
 
 
     /**
@@ -41,16 +42,48 @@ public class CardRepositoryImpl implements CardRepository {
         return Optional.ofNullable(cards.get(cardNumber));
     }
 
-    // TODO добавление транзакции в хранилище
+
+    /**
+     * addTransaction - сохраняет в хранилище неподтвержденную операцию.
+     * Операция будет лежать там, пока её не подтвердит пользователь.
+     * @param operationId - id операции
+     * @param transaction - транзакция
+     * @return - вернем true при успешной записи, и false при ошибках записи
+     */
     @Override
-    public boolean addTransaction(long operationId, Transaction transaction) {
-        transactions.put(operationId, transaction);
-        return false;
+    public boolean addTransaction(String operationId, Transaction transaction) {
+        try{
+            transactions.put(operationId, transaction);
+        }
+        catch (NullPointerException e){
+            return false;
+        }
+        return transactions.containsKey(operationId);
     }
 
-    // TODO удаление транзакции их хранилища
+    /**
+     * getTransaction - метод получения транзакции по её id.
+     * @param operationId - id операции
+     * @return - вернем транзакцию, если она существует, иначе будет empty()
+     */
     @Override
-    public boolean deleteTransaction(long operationId) {
-        return false;
+    public Optional<Transaction> getTransaction(String operationId) {
+        return Optional.ofNullable(transactions.get(operationId));
+    }
+
+    /**
+     * deleteTransaction - при успешно проведенной операции, мы должны удалить транзакцию из списка не проведенных.
+     * @param operationId - id операции
+     * @return - вернем true при успешном удалении, false при ошибках
+     */
+    @Override
+    public boolean deleteTransaction(String operationId) {
+        try{
+            transactions.remove(operationId);
+        }
+        catch (NullPointerException e){
+            return false;
+        }
+        return true;
     }
 }

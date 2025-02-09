@@ -6,9 +6,7 @@ import ru.safiullina.CW_Money_Transfer_Service.exeption.ErrorTransfer;
 import ru.safiullina.CW_Money_Transfer_Service.model.*;
 import ru.safiullina.CW_Money_Transfer_Service.repository.CardRepository;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
@@ -24,6 +22,38 @@ public class CardService {
     }
 
     public OkResponsesDTO confirm(Confirmation confirmation) {
+        Optional<Transaction> transaction = cardRepository.getTransaction(confirmation.getOperationId());
+
+        if (transaction.isEmpty()) {
+            throw new ErrorInputData("Error input data");
+        }
+
+        // Получим параметры транзакции
+        Card cardFrom = transaction.get().getCardFrom();
+        Card cardTo = transaction.get().getCardTo();
+        String currency = transaction.get().getCurrency();
+        long value = transaction.get().getValue();
+
+        if (!Objects.equals(confirmation.getCode(), transaction.get().getCode())) {
+            throw new ErrorInputData("Error input data");
+        }
+
+        // Сделаем списание и зачисление денег.
+        long valueCardFrom = cardFrom.getCardSums().get(currency);
+        long valueCardTo = cardTo.getCardSums().get(currency);
+        makeTransaction(cardFrom, cardTo, currency, value);
+
+        // Проверим результат перевода
+        if ((cardTo.getCardSums().get(currency) - valueCardTo) != value
+                || (valueCardFrom - cardFrom.getCardSums().get(currency)) != value) {
+            throw new ErrorTransfer("Error transfer");
+        }
+
+        // Удалим транзакцию из списка неподтвержденных
+        if (!cardRepository.deleteTransaction(confirmation.getOperationId())) {
+            throw new ErrorTransfer("Error transfer");
+        }
+
         return new OkResponsesDTO(Long.toString(operationId.incrementAndGet()));
     }
 
@@ -43,26 +73,21 @@ public class CardService {
         if (amount == null) {
             throw new ErrorInputData("Error input data: incorrect value");
         }
+        // Получим и сохраним валюту и сумму перевода
         String currency = transfer.getAmount().getCurrency();
         long value = transfer.getAmount().getValue();
 
-        // Создадим макет транзакции, не подтвержденный перевод
-        Transaction transaction = new Transaction(cardFrom.getCardNumber(), cardTo.getCardNumber(), currency, value, "999");
-
-
-        // Проверим достаточно ли денег на карте отправителя.
-        // Сделаем списание и зачисление денег.
-        long valueCardFrom = cardFrom.getCardSums().get(currency);
-        long valueCardTo = cardTo.getCardSums().get(currency);
-        makeTransaction(cardFrom, cardTo, currency, value);
-
-        // Проверим результат перевода
-        if ((cardTo.getCardSums().get(currency) - valueCardTo) != value
-                || (valueCardFrom - cardFrom.getCardSums().get(currency)) != value) {
-            throw new ErrorTransfer("Error transfer");
+        // Проверим достаточно ли денег на карте отправителя
+        if (cardFrom.getCardSums().get(currency) < value) {
+            throw new ErrorInputData("Error input data: not enough money");
         }
 
-        return new OkResponsesDTO(Long.toString(operationId.incrementAndGet()));
+        // Создадим макет транзакции, не подтвержденный перевод
+        Transaction transaction = new Transaction(cardFrom, cardTo, currency, value, "999");
+        if (!cardRepository.addTransaction(String.valueOf(operationId.incrementAndGet()), transaction)) {
+            throw new ErrorTransfer("Error transfer");
+        }
+        return new OkResponsesDTO(Long.toString(operationId.get()));
     }
 
     private void makeTransaction(Card cardFrom, Card cardTo, String currency, long value) {

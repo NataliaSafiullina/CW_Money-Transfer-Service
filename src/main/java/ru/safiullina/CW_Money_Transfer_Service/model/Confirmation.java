@@ -1,5 +1,8 @@
 package ru.safiullina.CW_Money_Transfer_Service.model;
 
+/**
+ * Класс Confirmation служит для разбора полученного от фронта подтверждения операции.
+ */
 public class Confirmation {
     private String operationId;
     private String code;

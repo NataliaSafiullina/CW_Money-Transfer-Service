@@ -1,5 +1,7 @@
 package ru.safiullina.CW_Money_Transfer_Service.model;
 
+import java.util.Objects;
+
 /**
  * Объекты класса Transaction хранят данные о транзакциях.
  * Аналитики транзакций:
@@ -10,8 +12,8 @@ package ru.safiullina.CW_Money_Transfer_Service.model;
  * - код подтверждения данной транзакции
  */
 public class Transaction {
-    private String cardFrom;
-    private String cardTo;
+    private Card cardFrom;
+    private Card cardTo;
     private String currency;
     private long value;
     private String code;
@@ -19,7 +21,7 @@ public class Transaction {
     public Transaction() {
     }
 
-    public Transaction(String cardFrom, String cardTo, String currency, long value, String code) {
+    public Transaction(Card cardFrom, Card cardTo, String currency, long value, String code) {
         this.cardFrom = cardFrom;
         this.cardTo = cardTo;
         this.currency = currency;
@@ -27,11 +29,11 @@ public class Transaction {
         this.code = code;
     }
 
-    public String getCardFrom() {
+    public Card getCardFrom() {
         return cardFrom;
     }
 
-    public String getCardTo() {
+    public Card getCardTo() {
         return cardTo;
     }
 
@@ -45,5 +47,18 @@ public class Transaction {
 
     public String getCode() {
         return code;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Transaction that = (Transaction) o;
+        return getValue() == that.getValue() && Objects.equals(getCardFrom(), that.getCardFrom()) && Objects.equals(getCardTo(), that.getCardTo()) && Objects.equals(getCurrency(), that.getCurrency()) && Objects.equals(getCode(), that.getCode());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getCardFrom(), getCardTo(), getCurrency(), getValue(), getCode());
     }
 }
