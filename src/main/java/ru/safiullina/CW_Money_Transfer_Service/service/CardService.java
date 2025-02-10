@@ -22,6 +22,7 @@ public class CardService {
     }
 
     public OkResponsesDTO confirm(Confirmation confirmation) {
+        // Найдем транзакцию по коду операции
         Optional<Transaction> transaction = cardRepository.getTransaction(confirmation.getOperationId());
 
         if (transaction.isEmpty()) {
@@ -41,7 +42,9 @@ public class CardService {
         // Сделаем списание и зачисление денег.
         long valueCardFrom = cardFrom.getCardSums().get(currency);
         long valueCardTo = cardTo.getCardSums().get(currency);
-        makeTransaction(cardFrom, cardTo, currency, value);
+        if (!makeTransaction(cardFrom, cardTo, currency, value)) {
+            throw new ErrorInputData("Error input data: error in transaction");
+        }
 
         // Проверим результат перевода
         if ((cardTo.getCardSums().get(currency) - valueCardTo) != value
@@ -58,6 +61,7 @@ public class CardService {
     }
 
     public OkResponsesDTO transfer(Transfer transfer) {
+        // Создадим карты для тестовой работы, в реальной работе карты уже будут в хранилище
         addCards(transfer);
 
         // Получаем карты участвующие в операции
@@ -66,7 +70,9 @@ public class CardService {
         Card cardTo = cards.get(1);
 
         // Проводим валидацию карты отправителя
-        validateCardFrom(cardFrom, transfer);
+        if (!validateCardFrom(cardFrom, transfer)) {
+            throw new ErrorInputData("Error input data: incorrect CVV or date");
+        }
 
         // Проверим параметры операции
         Amount amount = transfer.getAmount();
@@ -90,7 +96,7 @@ public class CardService {
         return new OkResponsesDTO(Long.toString(operationId.get()));
     }
 
-    private void makeTransaction(Card cardFrom, Card cardTo, String currency, long value) {
+    private boolean makeTransaction(Card cardFrom, Card cardTo, String currency, long value) {
         if (cardFrom.getCardSums().containsKey(currency)) {
             long amountFrom = cardFrom.getCardSums().get(currency) - value;
             if (amountFrom >= 0) {
@@ -103,21 +109,20 @@ public class CardService {
                 cardTo.setCardSums(cardToSums);
                 // Конец транзакции
             } else {
-                throw new ErrorInputData("Error input data: not enough money");
+                return false;
             }
         } else {
-            throw new ErrorInputData("Error input data: currency does not exist");
+            return false;
         }
+        return true;
     }
 
-    private void validateCardFrom(Card cardFrom, Transfer transfer) {
+    private boolean validateCardFrom(Card cardFrom, Transfer transfer) {
         Card cardFromForValidation = new Card(
                 transfer.getCardFromNumber(),
                 transfer.getCardFromValidTill(),
                 transfer.getCardFromCVV());
-        if (!cardFrom.equals(cardFromForValidation)) {
-            throw new ErrorInputData("Error input data: incorrect CVV or date");
-        }
+        return cardFrom.equals(cardFromForValidation);
     }
 
     private List<Card> getCards(Transfer transfer) {

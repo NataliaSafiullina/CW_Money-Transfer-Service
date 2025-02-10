@@ -61,4 +61,15 @@ public class Transaction {
     public int hashCode() {
         return Objects.hash(getCardFrom(), getCardTo(), getCurrency(), getValue(), getCode());
     }
+
+    @Override
+    public String toString() {
+        return "Transaction{" +
+                "cardFrom=" + cardFrom +
+                ", cardTo=" + cardTo +
+                ", currency='" + currency + '\'' +
+                ", value=" + value +
+                ", code='" + code + '\'' +
+                '}';
+    }
 }
