@@ -1,21 +1,26 @@
 package ru.safiullina.CW_Money_Transfer_Service.service;
 
 import org.springframework.stereotype.Service;
+import ru.safiullina.CW_Money_Transfer_Service.exeption.ErrorConfirmation;
 import ru.safiullina.CW_Money_Transfer_Service.exeption.ErrorInputData;
 import ru.safiullina.CW_Money_Transfer_Service.exeption.ErrorTransfer;
+import ru.safiullina.CW_Money_Transfer_Service.logger.Logger;
+import ru.safiullina.CW_Money_Transfer_Service.logger.LoggerImpl;
 import ru.safiullina.CW_Money_Transfer_Service.model.*;
 import ru.safiullina.CW_Money_Transfer_Service.repository.CardRepository;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class CardService {
 
     // operation ID - будем хранить идентификатор операции
-    protected AtomicLong operationId = new AtomicLong();
+    protected AtomicInteger operationId = new AtomicInteger();
 
     private final CardRepository cardRepository;
+
+    private Logger logger = LoggerImpl.getInstance();
 
     public CardService(CardRepository cardRepository) {
         this.cardRepository = cardRepository;
@@ -26,7 +31,7 @@ public class CardService {
         Optional<Transaction> transaction = cardRepository.getTransaction(confirmation.getOperationId());
 
         if (transaction.isEmpty()) {
-            throw new ErrorInputData("Error input data");
+            throw new ErrorInputData("operation ID does not exist");
         }
 
         // Получим параметры транзакции
@@ -36,28 +41,42 @@ public class CardService {
         long value = transaction.get().getValue();
 
         if (!Objects.equals(confirmation.getCode(), transaction.get().getCode())) {
-            throw new ErrorInputData("Error input data");
+            String error = "invalid code";
+            logger.log(logTransaction(confirmation.getOperationId(), transaction.get(),
+                    "confirmation: " + error, "fail"));
+            throw new ErrorInputData(error);
         }
 
         // Сделаем списание и зачисление денег.
         long valueCardFrom = cardFrom.getCardSums().get(currency);
         long valueCardTo = cardTo.getCardSums().get(currency);
         if (!makeTransaction(cardFrom, cardTo, currency, value)) {
-            throw new ErrorInputData("Error input data: error in transaction");
+            String error = "operation failed";
+            logger.log(logTransaction(confirmation.getOperationId(), transaction.get(),
+                    "confirmation: " + error, "fail"));
+            throw new ErrorConfirmation(error);
         }
 
         // Проверим результат перевода
         if ((cardTo.getCardSums().get(currency) - valueCardTo) != value
                 || (valueCardFrom - cardFrom.getCardSums().get(currency)) != value) {
-            throw new ErrorTransfer("Error transfer");
+            String error = "operation failed";
+            logger.log(logTransaction(confirmation.getOperationId(), transaction.get(),
+                    "confirmation: " + error, "fail"));
+            throw new ErrorConfirmation(error);
         }
 
         // Удалим транзакцию из списка неподтвержденных
         if (!cardRepository.deleteTransaction(confirmation.getOperationId())) {
-            throw new ErrorTransfer("Error transfer");
+            String error = "during deleting transaction";
+            logger.log(logTransaction(confirmation.getOperationId(), transaction.get(),
+                    "confirmation: " + error, "fail"));
+            throw new ErrorConfirmation(error);
         }
 
-        return new OkResponsesDTO(Long.toString(operationId.incrementAndGet()));
+        logger.log(logTransaction(confirmation.getOperationId(), transaction.get(),
+                "confirmation", "OK"));
+        return new OkResponsesDTO(Integer.toString(operationId.incrementAndGet()));
     }
 
     public OkResponsesDTO transfer(Transfer transfer) {
@@ -71,13 +90,17 @@ public class CardService {
 
         // Проводим валидацию карты отправителя
         if (!validateCardFrom(cardFrom, transfer)) {
-            throw new ErrorInputData("Error input data: incorrect CVV or date");
+            String error = "incorrect CVV or date";
+            logger.log(logTransfer("", transfer, "transfer: " + error, "fail"));
+            throw new ErrorInputData(error);
         }
 
         // Проверим параметры операции
         Amount amount = transfer.getAmount();
         if (amount == null) {
-            throw new ErrorInputData("Error input data: incorrect value");
+            String error = "incorrect value";
+            logger.log(logTransfer("", transfer, "transfer: " + error, "fail"));
+            throw new ErrorInputData(error);
         }
         // Получим и сохраним валюту и сумму перевода
         String currency = transfer.getAmount().getCurrency();
@@ -85,15 +108,21 @@ public class CardService {
 
         // Проверим достаточно ли денег на карте отправителя
         if (cardFrom.getCardSums().get(currency) < value) {
-            throw new ErrorInputData("Error input data: not enough money");
+            String error = "not enough money";
+            logger.log(logTransfer("", transfer, "transfer: " + error, "fail"));
+            throw new ErrorInputData(error);
         }
 
         // Создадим макет транзакции, не подтвержденный перевод
         Transaction transaction = new Transaction(cardFrom, cardTo, currency, value, "999");
         if (!cardRepository.addTransaction(String.valueOf(operationId.incrementAndGet()), transaction)) {
-            throw new ErrorTransfer("Error transfer");
+            String error = "can not make an operation";
+            logger.log(logTransfer("", transfer, "transfer: " + error, "fail"));
+            throw new ErrorTransfer(error);
         }
-        return new OkResponsesDTO(Long.toString(operationId.get()));
+
+        logger.log(logTransfer(Integer.toString(operationId.get()), transfer, "transfer", "OK"));
+        return new OkResponsesDTO(Integer.toString(operationId.get()));
     }
 
     private boolean makeTransaction(Card cardFrom, Card cardTo, String currency, long value) {
@@ -117,6 +146,21 @@ public class CardService {
         return true;
     }
 
+    private String logTransaction (String id, Transaction transaction, String operation, String result){
+        return " [" + id + "] " +
+                transaction.getCardFrom().getCardNumber() + " -> " + transaction.getCardTo().getCardNumber() +
+                " ( " + transaction.getValue() + " " + transaction.getCurrency() + " ) " +
+                operation + " ==> " + result;
+    }
+
+
+    private String logTransfer (String id, Transfer transfer, String operation, String result){
+        return " [" + id + "] " +
+                transfer.getCardFromNumber() + " -> " + transfer.getCardToNumber() +
+                " ( " + transfer.getAmount().getValue() + " " + transfer.getAmount().getCurrency() + " ) " +
+                operation + " ==> " + result;
+    }
+
     private boolean validateCardFrom(Card cardFrom, Transfer transfer) {
         Card cardFromForValidation = new Card(
                 transfer.getCardFromNumber(),
@@ -127,9 +171,9 @@ public class CardService {
 
     private List<Card> getCards(Transfer transfer) {
         Card cardFrom = cardRepository.getByNumber(transfer.getCardFromNumber()).orElseThrow(
-                () -> new ErrorInputData("Error input data: card " + transfer.getCardFromNumber() + " does not exist"));
+                () -> new ErrorInputData("card " + transfer.getCardFromNumber() + " does not exist"));
         Card cardTo = cardRepository.getByNumber(transfer.getCardToNumber()).orElseThrow(
-                () -> new ErrorInputData("Error input data: " + transfer.getCardToNumber() + " does not exist"));
+                () -> new ErrorInputData("card " + transfer.getCardToNumber() + " does not exist"));
         return List.of(cardFrom, cardTo);
     }
 
