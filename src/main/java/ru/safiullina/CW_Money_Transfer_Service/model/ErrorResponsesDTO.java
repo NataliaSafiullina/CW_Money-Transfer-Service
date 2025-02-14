@@ -1,5 +1,7 @@
 package ru.safiullina.CW_Money_Transfer_Service.model;
 
+import java.util.Objects;
+
 /**
  * Класс ErrorResponses, его задача - принять наше сообщение об ошибке
  * и переслать его фронту вместе со статусом.
@@ -39,5 +41,18 @@ public class ErrorResponsesDTO {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ErrorResponsesDTO that = (ErrorResponsesDTO) o;
+        return getId() == that.getId() && Objects.equals(getMessage(), that.getMessage());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getMessage(), getId());
     }
 }
