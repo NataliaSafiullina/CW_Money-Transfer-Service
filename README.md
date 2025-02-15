@@ -71,7 +71,9 @@ Body:
     "operationId": "2"
 }
 
-где 2 - это номер операции.
+Где 2 - это номер операции.
+
+![img.png](screenshots/img3.png)
 
 + Теперь отправим запрос на подтверждение операцию с указанным номером
 
@@ -95,3 +97,4 @@ Body:
     "operationId": "3"
 }
 
+![img_1.png](screenshots/img4.png)
