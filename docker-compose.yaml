@@ -4,4 +4,4 @@ services:
   transferapp:
     image: 'transferapp:latest'
     ports:
-      - '8080:5500'
+      - '5500:5500'
